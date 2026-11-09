@@ -1,0 +1,4 @@
+.DS_Store
+*.pt
+work/
+__pycache__/
