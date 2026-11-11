@@ -1,0 +1,152 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,urlcolor=blue!50!black,citecolor=blue!50!black]{hyperref}
+\usepackage{enumitem}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\TODO}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+
+% =====================================================================================
+% TEMPLATE. Replace everything in [square brackets]. Lines starting with % are
+% instructions: delete them in the final version. Target: about 1500 words in total
+% (tables, captions and references do not count much, but keep the text compact).
+% Grading map: Methodology and motivation 0.75 | Results and analysis 0.75 | Final
+% model and run instructions 0.5.
+% =====================================================================================
+
+\title{[Short descriptive title]}
+\author{Vladyslav Vasylchenko \and Oleh Hombosh}
+\date{UCU, Artificial Intelligence, Homework 2 --- [month year]}
+
+\begin{document}
+\maketitle
+
+\noindent\textbf{Code:} [GitHub link] (notebook: [path]).\quad
+\textbf{Best public score:} 0.3093 (competition baseline: 0.2216).
+
+% ------------------------------------------------------------------ METHODOLOGY (0.75)
+\section{Data and validation}
+% REQUIRED (rubric "Data Understanding and Preprocessing"):
+% - class distribution, object-size distribution, objects per frame, and how they vary across sequences;
+% - which observations drive later choices (input resolution, anchors, number of queries, augmentation);
+% - annotation conversion; ignored regions and non-target classes; how you verified it (visualization);
+% - split BY SEQUENCE (not by frame) and why; frame subsampling step and why;
+% - resizing, normalization, augmentation; fixed seeds.
+\paragraph{Task and data.} [Task, metric, number of clips/frames/objects.]
+\paragraph{What we found.} [3--5 numbered observations with numbers.]
+\paragraph{Choices that follow.} [Each observation -> one decision.]
+\paragraph{Validation.} [Split design, fold, step size, metric details, preprocessing.]
+
+\section{Detector comparison}
+% REQUIRED for each family: training setup, tuned parameters (at least two experiments beyond
+% the baseline: one hyperparameter, one loss change), mAP / AP50 / AP_small / speed, and:
+% - two-stage: role of the proposal stage vs the second stage; >= 3 failure cases with causes;
+% - one-stage anchor-based: can removing the proposal stage cause problems, and how to fix;
+%   anchors grounded in object sizes; compare initial and tuned models with the two-stage one;
+% - anchor-free: how locations are assigned without anchors, effect on small/dense objects;
+%   search range and selected settings; compare with anchor-based, split by object size;
+% - query-based: how bipartite matching removes NMS and changes training; mAP-over-epochs plot
+%   against a CNN detector at the same budget; small objects and dense scenes; convergence.
+[One short paragraph of common protocol: same fold, frames, input size, metric, epochs, seeds.]
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{lccccc}
+\toprule
+Experiment & mAP & AP50 & AP$_S$ & AP$_L$ & ms/frame \\
+\midrule
+Faster R-CNN baseline (seed 42) & 0.169 & 0.346 & 0.078 & 0.422 & 44 \\
+Faster R-CNN baseline (seed 7) & 0.169 & 0.351 & 0.076 & 0.417 & 43 \\
+\quad + K-Means anchors 16--256 & 0.164 & 0.349 & 0.082 & 0.388 & 43 \\
+\quad + same, largest anchor 512 & 0.163 & 0.346 & 0.083 & 0.389 & 43 \\
+\quad + RoI positive fraction 0.33 & 0.165 & 0.353 & 0.084 & 0.395 & 43 \\
+\quad + GIoU box loss, weight 2 & 0.159 & 0.338 & 0.073 & 0.390 & 43 \\
+\quad + GIoU box loss, weight 5 & 0.162 & 0.343 & 0.078 & 0.389 & 43 \\
+Baseline (seed 7), 300 proposals & 0.168 & 0.350 & 0.076 & 0.415 & 41 \\
+Baseline (seed 7), 1000 proposals & 0.171 & 0.360 & 0.075 & 0.417 & 45 \\
+Baseline (seed 7), 2000 proposals & 0.172 & 0.361 & 0.075 & 0.417 & 51 \\
+\midrule
+RetinaNet baseline (COCO anchors) & 0.150 & 0.288 & 0.020 & 0.406 & 41 \\
+\quad + K-Means anchors 16--256 & 0.147 & 0.312 & 0.067 & 0.357 & 41 \\
+\quad + anchors + GIoU box loss & 0.150 & 0.317 & 0.071 & 0.355 & 41 \\
+\quad + anchors, IoU thresholds 0.4/0.3 & 0.140 & 0.293 & 0.071 & 0.363 & 41 \\
+\midrule
+YOLO11s baseline & 0.197 & 0.385 & 0.090 & 0.447 & 20 \\
+\quad + P2 (stride-4) head & 0.159 & 0.319 & 0.096 & 0.355 & 24 \\
+\quad + P2 head, box loss weight 10 & 0.163 & 0.330 & 0.077 & 0.359 & 25 \\
+\midrule
+RT-DETRv2, 300 queries (baseline) & 0.240 & 0.463 & 0.099 & 0.517 & 38 \\
+\quad 100 queries & 0.230 & 0.441 & 0.090 & 0.508 & 38 \\
+\quad 500 queries & 0.239 & 0.460 & 0.088 & 0.528 & 39 \\
+\quad GIoU matching cost & 0.237 & 0.462 & 0.095 & 0.522 & 38 \\
+\quad no denoising / auxiliary loss & 0.110 & 0.239 & 0.018 & 0.334 & 38 \\
+\quad single learning rate & 0.246 & 0.467 & 0.108 & 0.538 & 38 \\
+\bottomrule
+\end{tabular}
+\caption{Validation results (fold 3). Indented rows change one thing relative to the row above their block's baseline. Speeds are rough: YOLO timing includes pre-processing and NMS, the others do not. Public score: only the YOLO11s baseline was submitted (0.175).}
+\label{tab:all}
+\end{table}
+
+\paragraph{Two-stage.} [Setup; experiments; role of the two stages; three failure cases.]
+\paragraph{One-stage anchor-based.} [Setup; anchor choice from data; experiments; proposal-free issues; comparison.]
+\paragraph{One-stage anchor-free.} [Setup; label assignment; search range; experiments; comparison by size.]
+\paragraph{Query-based.} [Setup; bipartite matching and NMS; experiments; curves figure; small/dense objects; convergence.]
+% \begin{figure}[h]\centering\includegraphics[width=0.8\linewidth]{images/curves.png}\caption{[...]}\end{figure}
+
+\section{Final pipeline}
+% REQUIRED: final pipeline justified by earlier results; intermediate comparisons that separate
+% the effect of DATA / INFERENCE changes from the effect of the MODEL; leaderboard scores.
+\paragraph{Data and inference strategy.} [What you changed and why (link to Section 2 findings).]
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{lcc}
+\toprule
+Step & Val mAP & Public \\
+\midrule
+YOLO11s baseline, 960\,px (Sec.~4, fold of 13 clips) & 0.197 & 0.175 \\
+YOLO26s, 1280\,px, views + WBF (first pipeline) & --- & 0.195 \\
+\midrule
+YOLO26m on tiles, single full view 640\,px & 0.164 & --- \\
+\quad same model, full view 960 / 1280 / 1536\,px & 0.190 / 0.198 / 0.204 & --- \\
+\quad native tiles alone / up-scaled tiles alone & 0.158 / 0.181 & --- \\
+\quad WBF: full\_up + tiles\_up + tiles\_flip + tiles & 0.240 & 0.250 \\
+\quad WBF: full\_1536 + tiles\_up + tiles\_flip + full\_1280\_flip, IoU 0.7 & 0.242 & 0.256 \\
+\quad + neighbour-frame rescoring ($\alpha=0.2$) & 0.241 & not submitted \\
+Final submission (current best on the leaderboard) & --- & \textbf{0.3093} \\
+\bottomrule
+\end{tabular}
+\caption{Pipeline steps. Rows from YOLO26m onward use the 12-clip validation fold (see Section~1), so they are not exactly comparable with the rows above. No validation score is recorded for the final submission.}
+\label{tab:pipe}
+\end{table}
+
+\paragraph{What helped and what did not.} [Gains per step; unsuccessful attempts; limitations.]
+
+% ------------------------------------------------------------------ FINAL MODEL (0.5)
+\section{Final model and how to run it}
+% REQUIRED: the selected model or ensemble; how to train it and generate the submitted
+% predictions; dependencies, settings, seeds; expected run time.
+\textbf{Selected solution:} [model, views/ensemble, thresholds]. Environment: [Python, PyTorch, library versions, GPU]; seed [42].
+\begin{enumerate}
+\item [Where to open the notebook and which data to attach.]
+\item [Which sections to run, in which order.]
+\item [Where the submission file appears.]
+\end{enumerate}
+Main settings: [key constants].
+
+\section{Conclusions}
+[3--4 sentences: what worked, what did not, limitations.]
+
+\paragraph{Sources of code and ideas.} [Libraries, papers, repositories, and who did what.]
+% Optional AI-assistance statement, if your course requires it.
+
+\begin{thebibliography}{99}\footnotesize
+\bibitem{key1} [Authors. Title. \emph{Venue}, year.]
+\end{thebibliography}
+\end{document}
