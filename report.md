@@ -1,40 +1,101 @@
----
-title: Homework 1 -- Your Title Here
-author: John Doe
-course: Artificial Intelligence · UCU
-date: 2026-10-12
----
+# Homework 2: Multiple Object Video Detection
 
-## Introduction
+## Methodology and motivation
 
-Write your report here using regular **Markdown**. This text is an example — replace it.
+### Data preparation
 
-## Method
+На основі аналізу набору даних VisDrone ми змогли зробити наступні висновки:
 
-Inline math works with single dollars: $f(x) = \sigma(Wx + b)$. Display math uses double dollars:
+Обʼєкти дуже дрібні. Це повʼязано зі специфікою зйомки з дрона. З цього випливає, що обʼєктів на фото більше і вони щільно розміщені. Наявні моделі зазвичай вгадують до 100 обʼєктів на фото. Натомість, в нас їх може бути до 180.
 
-$$
-\mathcal{L}(\theta) = -\frac{1}{N}\sum_{i=1}^{N} y_i \log \hat{y}_i
-$$
+Також, кожен ignore-регіон був продубльований 8 разів (під кожен клас). Ми прибрали усі дублікати.
 
-Code blocks are highlighted:
+Під час тренування ці регіони заповнювалися нейтральним середнім кольором ImageNet (IM_MEAN), щоб уникнути хибних покарань моделі за детекцію нерозмічених скупчень об'єктів.
 
-```python
-def accuracy(y_true, y_pred):
-    return (y_true == y_pred).mean()
-```
+Ми брали кожен третій кадр, оскільки через специфіку відео сусідні кадри майже однакові.
 
-## Results
+Кадри масштабувалися до 960 px, координати обрізалися по межах, а вироджені бокси (< 1 px) відфільтровувалися для запобігання появі NaN у функціях втрат.
 
-| Model    | Accuracy | F1   |
-|----------|----------|------|
-| Baseline | 0.71     | 0.68 |
-| Ours     | 0.84     | 0.82 |
+12 категорій VisDrone зменшено до 8 класів: схожі підкласи об'єднано (pedestrian і people у person, tricycle і awning-tricycle у tricycle), а нецільовий клас others вилучено.
 
-Images go into the `images/` folder:
+На тренувальних фолдах (без витоку даних) проведено K-Means кластеризацію розмірів боксів, що дозволило адаптувати сітку якорів під дрібні об'єкти (16..256 px замість дефолтних COCO 32..512 px).
 
-<!-- ![Training loss](images/loss.png) -->
+### Validation
 
-## Conclusion
+Спліт потрібно робити виключно по роликам (а не по фото з роликів), інакше матимемо data leakage. Основною метрикою для валідації є mAP, яка включає в себе AP_small та AP_large. Більшість моделей претреновані на великі бокси. Через що навіть найменші бокси не завжди покривають наші маленькі обʼєкти. Тому майже вся робота - це боротьба за AP_small та намагання перетнерувати моделі на іншу специфіку кадрів.
 
-> Summarize your findings here.
+### Models
+
+#### Two-stage anchor-based
+
+Обранли Faster R-CNN як бейзлайн: RPN на першій стадії відсікає складний фон, а RoIAlign на другій уточнює координати. Тюнінгували адаптацією якорів під K-Means (16..256), збільшення частки позитивних RoI з 0.25 до 0.33 і заміна Smooth L1 на GIoU.
+
+#### One-stage anchor-based
+
+#### Query-based
+
+Обрали RT-DETRv2, бо він не використовує якорі та NMS, що важливо для щільних сцен до 180 об'єктів. Тюнінгували зміною кількості запитів (100 / 300 / 500), вагами GIoU, вимкненням denoising+aux loss та LR бекбону.
+
+#### For pipeline
+
+## Results and analysis
+
+### Consistent benchmarks
+
+Усі моделі навчалися на 5 епохах:
+
+| Модель | Сімейство | mAP | AP50 | AP_small | AP_large |
+| --- | --- | :---: | :---: | :---: | :---: |
+| Faster R-CNN (baseline) | Two-stage | 0.171 | 0.350 | 0.073 | 0.433 |
+| RetinaNet | One-stage anchor-based | | | | |
+| YOLO11 | One-stage anchor-free | | | | |
+| RT-DETRv2 (r50vd, q=300) | Query-based | 0.240 | 0.463 | 0.099 | 0.517 |
+
+Окремі прогони Faster R-CNN та RT-DETRv2 (шум між сідами становить ~0.002-0.003):
+
+| Конфігурація | Що змінено | mAP | AP50 | AP_small | AP_large |
+| --- | --- | :---: | :---: | :---: | :---: |
+| frcnn_baseline | Дефолтні якорі COCO (32..512) | 0.171 | 0.350 | 0.073 | 0.433 |
+| frcnn_exp1_anchors | Якорі K-Means (16..256) | 0.164 | 0.352 | 0.084 | 0.384 |
+| frcnn_exp2_posfrac | + box_positive_fraction = 0.33 | 0.171 | 0.363 | 0.081 | 0.394 |
+| frcnn_exp3_giou_w2 | + GIoU loss у RoIHeads | 0.160 | 0.340 | 0.078 | 0.386 |
+| rtdetr_baseline_q300 | q=300, lr_backbone=1e-5 | 0.240 | 0.463 | 0.099 | 0.517 |
+| rtdetr_exp1_q100 | num_queries = 100 | 0.230 | 0.441 | 0.090 | 0.508 |
+| rtdetr_exp1b_q500 | num_queries = 500 | 0.237 | 0.459 | 0.101 | 0.512 |
+| rtdetr_exp2_giou_cost | Підвищена вага GIoU | 0.237 | 0.462 | 0.095 | 0.522 |
+| rtdetr_exp3_no_dn_aux | Без Denoising + Aux loss | 0.159 | 0.327 | 0.041 | 0.382 |
+| rtdetr_exp4_uniform_lr | Єдиний LR 1e-4 | 0.246 | 0.467 | 0.108 | 0.538 |
+
+### Incremental improvements
+
+Faster R-CNN (pos_frac = 0.33): збільшення частки позитивних RoI повернуло mAP до 0.171 і підняло AP50 з 0.350 до 0.363.
+
+RT-DETRv2: підняття lr_backbone у 10 разів (з 1e-5 до 1e-4) дало найкращий результат 0.246 mAP та 0.108 AP_small. Згорточним фільтрам ResNet-50vd, претренованим на наземному COCO, не вистачало 1e-5 для адаптації під фото з дронів за 5 епох.
+
+### Feature experiments
+
+Кількість запитів (q=300 vs q=500): результати практично однакові в межах шуму (0.240 vs 0.237), але q=500 трохи повільніший (39.0 проти 37.9 мс/кадр).
+
+У щільних сценах RT-DETRv2 (q=300) виграє у Faster R-CNN (59.6% проти 45.4%) завдяки відсутності NMS, а за розміром найбільший приріст на 16-32 px (46.7% проти 32.2%) та 32-96 px (70.1% проти 57.7%).
+
+### Unsuccessful attempts
+
+K-Means якорі у Faster R-CNN (16..256 px): підняли AP_small (з 0.073 до 0.084), але провалили AP_large (з 0.433 до 0.384), знизивши загальний mAP до 0.164.
+
+Збільшення ваги GIoU: не допомогло малим об'єктам ані у Faster R-CNN (падіння з 0.171 до 0.160), ані в RT-DETRv2 (з 0.240 до 0.237, з AP_small 0.099 до 0.095).
+
+RT-DETRv2 q=100: mAP впав до 0.230, а Recall у щільних кадрах - з 59.6% до 54.5%, бо за EDA в кадрі буває до 180 об'єктів і 100 слотів фізично не вистачає.
+
+Вимкнення Denoising + Aux loss (exp3): обвал mAP до 0.159 і AP_small до 0.041 - без цих механізмів модель не встигає зійтися за 5 епох.
+
+### Conclusions supported by results.
+
+За 5 епох і Faster R-CNN (0.157 -> 0.174), і базовий RT-DETRv2 (0.253 -> 0.239) виходять на плато, тож перевага трансформера не є наслідком недовченості CNN. Натомість exp3 без денойзингу так і не вийшов на плато (0.072 -> 0.159).
+
+RT-DETRv2 швидший на інференсі (~38 vs ~43 мс/кадр у Faster R-CNN), але тренується приблизно в 1.5 рази повільніше (16.7 vs 11.4 хв/епоху на Tesla T4).
+
+Для об'єктів <16 px обидві архітектури знаходять лише 10-14% (обмеження роздільності stride=8).
+
+## Final model and run instructions
+
+### How to run selected model (dependencies, settings, and seeds)
